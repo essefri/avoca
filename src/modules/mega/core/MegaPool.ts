@@ -104,11 +104,6 @@ export class MegaPool extends EventEmitter {
   private driver: _MegaDriver;
 
   /**
-   * Tells if the pool did shutdown
-   */
-  private didShutdown: boolean;
-
-  /**
    * Creates a new instance of MegaPool
    * @param connectionOptions Connection configuration options
    * @param poolOptions Pool configuration options
@@ -127,7 +122,6 @@ export class MegaPool extends EventEmitter {
 
     this.id = Symbol("pool id");
     this.acquiredConnections = [];
-    this.didShutdown = false;
     this.errors = new Array();
 
     this.idleConnectionQ = new MemoryQ(this.poolOptions.maxIdleTime, Infinity);
@@ -361,15 +355,6 @@ export class MegaPool extends EventEmitter {
    */
   private createConnection(): Promise<_MegaConnection> {
     return new Promise((resolve, reject) => {
-      // to make sure no connection is created after the shutdown
-      if (this.didShutdown) {
-        return reject(
-          new MegaPoolError(
-            `Can't perform any farther operations during shutdown process`
-          )
-        );
-      }
-
       // creation faluire error message
       const parseMessage = (error: Error): string => {
         return Test.isError(error) && Test.isText(error.message)
@@ -419,14 +404,6 @@ export class MegaPool extends EventEmitter {
    */
   public request(): Promise<MegaPoolConnection> {
     return new Promise((resolve, reject) => {
-      if (this.didShutdown) {
-        return reject(
-          new MegaPoolError(
-            `Can't perform any farther operations during shutdown process`
-          )
-        );
-      }
-
       if (this.hasIdle()) {
         const connection = this.idleConnectionQ.pull()();
 
@@ -485,16 +462,40 @@ export class MegaPool extends EventEmitter {
     });
   }
 
+  /**
+   * Release the given connection
+   * @param connection Instance of MegaPoolConnection to release
+   */
+  public release(connection: MegaPoolConnection): void {
+    if (!Test.isChildOf(connection, MegaPoolConnection)) {
+      throw new MegaPoolError(
+        "The connection must be instance of MegaPoolConnection"
+      );
+    }
+
+    // if there are any connection requests
+    if (this.connectionRequestQ.hasJob()) {
+      const job = this.connectionRequestQ.pull();
+      // resolve the request with the connectin
+      return job(connection);
+    }
+
+    // register a new idle connection
+    const con = this.acquiredConnections.find(
+      (value: _MegaConnection) => value.id === connection.id
+    );
+
+    this.idleConnectionQ.put(() => con);
+  }
+
+  /**
+   * Executes the given sql statement
+   * @param sql The sql string
+   * @param values The values of the params defined in the sql string
+   * @returns The Expected result
+   */
   public query<T>(sql: string, values?: Array<any>): Promise<T> {
     return new Promise((resolve, reject) => {
-      if (this.didShutdown) {
-        return reject(
-          new MegaPoolError(
-            `Can't perform any farther operations during shutdown process`
-          )
-        );
-      }
-
       this.request()
         .then((connection) => {
           connection
@@ -514,16 +515,13 @@ export class MegaPool extends EventEmitter {
 
   public shutdown(): Promise<void> {
     return new Promise((resolve, reject) => {
-      // cant perform any other operation after you execute this method
-      this.didShutdown = true;
+      const connections: Array<Promise<void>> = [];
 
       if (this.acquiredConnections.length > 0) {
-        return reject(
-          new MegaPoolError(`Make sure to release all the connections first`)
-        );
+        this.acquiredConnections.forEach((connection) => {
+          connections.push(this.closeConnection(connection));
+        });
       }
-
-      const connections: Array<Promise<void>> = [];
 
       if (this.idleConnectionQ.size() > 0) {
         this.idleConnectionQ.batch().forEach((job) => {
@@ -533,7 +531,6 @@ export class MegaPool extends EventEmitter {
 
       Promise.all(connections)
         .then(() => {
-          this.errors = null;
           this.driver = null;
           this.poolOptions = null;
           this.connectionOptions = null;
@@ -544,6 +541,33 @@ export class MegaPool extends EventEmitter {
 
           this.idleConnectionQ.removeAllListeners();
           this.idleConnectionQ = null;
+
+          let shutdownError = () =>
+            Promise.reject(
+              new MegaPoolError(
+                `Can't perform any farther operations after shutdown`
+              )
+            );
+
+          this.createConnection = shutdownError;
+          this.closeConnection = shutdownError;
+          this.request = shutdownError;
+          this.query = shutdownError;
+
+          shutdownError = () => {
+            throw new MegaPoolError(
+              `Can't perform any farther operations after shutdown`
+            );
+          };
+
+          this.setError = shutdownError;
+          this.getErrors = shutdownError as any;
+          this.getAcquiredCount = shutdownError as any;
+          this.getIdleCount = shutdownError as any;
+          this.getRequestCount = shutdownError as any;
+          this.hasAcquired = shutdownError as any;
+          this.hasIdle = shutdownError as any;
+          this.hasRequest = shutdownError as any;
 
           resolve();
         })
@@ -577,112 +601,39 @@ export class MegaPool extends EventEmitter {
     });
   }
 
+  /**
+   * Register the given error in the pull
+   * @param error Instance of Error
+   */
   public getErrors(): PoolError[] {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
     return this.errors;
   }
 
-  public getPoolOptions(): _MegaPoolOptions {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
-    return this.poolOptions;
-  }
-
-  public getConnectionOptions(): _MegaConnectionOptions {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
-    return this.connectionOptions;
-  }
-
-  public getDriver(): _MegaDriver {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
-    return this.driver;
-  }
-
-  public getAquiredCount(): number {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
+  /**
+   * Register the given error in the pull
+   * @param error Instance of Error
+   */
+  public getAcquiredCount(): number {
     return this.acquiredConnections.length;
   }
 
   public getIdleCount(): number {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
     return this.idleConnectionQ.size();
   }
 
-  public getQueuedCount(): number {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
+  public getRequestCount(): number {
     return this.connectionRequestQ.size();
   }
 
   public hasAcquired(): boolean {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
     return this.acquiredConnections.length > 0;
   }
 
   public hasIdle(): boolean {
-    if (this.didShutdown) {
-      throw new MegaPoolError(
-        `Can't perform any farther operations during shutdown process`
-      );
-    }
-
     return this.idleConnectionQ.size() > 0;
   }
 
-  public release(connection: MegaPoolConnection): void {
-    if (!Test.isChildOf(connection, MegaPoolConnection)) {
-      throw new MegaPoolError(
-        "The connection must be instance of MegaPoolConnection"
-      );
-    }
-
-    if (this.connectionRequestQ.hasJob()) {
-      const job = this.connectionRequestQ.pull();
-      return job(connection); // resolve the request with the connectin
-    }
-
-    const con = this.acquiredConnections.find(
-      (value: _MegaConnection) => value.id === connection.id
-    );
-
-    // The aquired connection becomes idle
-    this.idleConnectionQ.put(() => con);
+  public hasRequest(): boolean {
+    return this.connectionRequestQ.size() > 0;
   }
 }

@@ -43,6 +43,11 @@ export class MegaPoolConnection {
     this.id = connection.id;
   }
 
+  /**
+   * Tells if the given connection is a valid _MegaConnection
+   * @param connection The connection to check
+   * @returns Boolean true if the connection is a valid connection instance
+   */
   private isConnection(connection: _MegaConnection): boolean {
     return (
       Test.isObject(connection) &&
@@ -50,6 +55,11 @@ export class MegaPoolConnection {
     );
   }
 
+  /**
+   * Tells if the given pool is a valid MegaPool
+   * @param pool The pool to check
+   * @returns Boolean true if the pool is a valid pool instance
+   */
   private isPool(pool: MegaPool): boolean {
     return (
       Test.isObject(pool) &&
@@ -57,6 +67,9 @@ export class MegaPoolConnection {
     );
   }
 
+  /**
+   * Releases the connection
+   */
   public release() {
     this.pool.release(this);
     this.connection = null;
@@ -74,6 +87,12 @@ export class MegaPoolConnection {
       );
   }
 
+  /**
+   * Execute the qiven sql query
+   * @param sql The sql string to execute
+   * @param values The values of the params defined in the sql string
+   * @returns Expected result
+   */
   public query<T>(sql: string, values?: Array<any>): Promise<T> {
     return new Promise((resolve, reject) => {
       this.connection

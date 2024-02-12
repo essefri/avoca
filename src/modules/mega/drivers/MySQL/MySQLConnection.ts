@@ -5,20 +5,17 @@ import { Test } from '../../../utils/Test';
 import { MySQLConnectionError } from '../../../../errors/mega/drivers/MySQLConnectionError';
 
 export class MySQLConnection implements _MegaConnection {
+
+    /**
+   * The Instance identifier
+   */
+    public id: Symbol;
+
   /**
    * The Inner MySQL Connection
    */
-  connection: Connection;
+  private connection: Connection;
 
-  /**
-   * The Instance identifier
-   */
-  id: Symbol;
-
-  /**
-   * Tells if the MySQLConnection is closed
-   */
-  isClosed: boolean = false;
 
   /**
    * Creates an instance of MySQLConnection
@@ -55,10 +52,6 @@ export class MySQLConnection implements _MegaConnection {
    */
   public query<T>(sql: string, values?: any[]): Promise<T> {
     return new Promise((resolve, reject) => {
-      if (this.isClosed) {
-        return reject(new MySQLConnectionError('Connection have been closed'));
-      }
-
       resolve(this.connection.execute(sql, values) as Promise<T>);
     });
   }
@@ -68,10 +61,13 @@ export class MySQLConnection implements _MegaConnection {
    * @returns Promise resolves when the connection close successfully
    */
   public close(): Promise<void> {
-    this.isClosed = true;
-
-    return new Promise((resolve) => {
-      resolve(this.connection.end());
+    return new Promise((resolve, reject) => {
+      this.connection.end().then(() => {
+        this.isAlive = () => Promise.reject(new MySQLConnectionError('Connection have been closed'));
+        this.query = () => Promise.reject(new MySQLConnectionError('Connection have been closed'));        
+        this.connection = null;
+        resolve()
+      }).catch((err) => reject(err))
     });
   }
 
@@ -82,10 +78,6 @@ export class MySQLConnection implements _MegaConnection {
    */
   public isAlive(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this.isClosed) {
-        return reject(new MySQLConnectionError('Connection have been closed'));
-      }
-
       this.connection
         .query('SELECT 1')
         .then(() => resolve())
