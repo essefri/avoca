@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "strictNullChecks": false,
+    "declaration": false,
+    "outDir": "./dist",
+    "incremental": true,
+    "strictPropertyInitialization": false,
+    "module": "CommonJS",
+    "downlevelIteration": true,
+    "target": "ES6"
+  },
+  "include": [
+    "./src/**/*.ts" // Include all TypeScript files in the src directory and its subdirectories
+  ],
+  "exclude": [
+    "node_modules" // Exclude the node_modules directory (optional but recommended)
+  ]
+}

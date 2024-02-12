@@ -1,0 +1,688 @@
+import { EventEmitter } from "events";
+
+import { _MegaDriver } from "../interfaces/_MegaDriver";
+import { _MegaConnection } from "../interfaces/_MegaConnection";
+import { _MegaPoolOptions } from "../types/_MegaPoolOptions";
+import { _MegaConnectionOptions } from "../types/_MegaConnectionOptions";
+
+import { MySQLDriver } from "../drivers/MySQL/MySQLDriver";
+import { MegaPoolConnection } from "./MegaPoolConnection";
+
+import { MemoryQ } from "../../utils/MemoryQ";
+import { Echo } from "../../utils/Echo";
+import { Test } from "../../utils/Test";
+
+import { CloseConnectionError } from "../../../errors/mega/CloseConnectionError";
+import { CreateConnectionError } from "../../../errors/mega/CreateConnectionError";
+import { MaxConnectionError } from "../../../errors/mega/MaxConnectionError";
+import { MegaPoolError } from "../../../errors/mega/dev/MegaPoolError";
+import { MaxQueueTimeError } from "../../../errors/mega/MaxQueueTimeError";
+import { MaxQueueSizeError } from "../../../errors/mega/MaxQueueSizeError";
+import { QueryFailError } from "../../../errors/mega/QueryFailError";
+
+export type PoolError = {
+  id: Symbol;
+  name: string;
+  message: string;
+  timestamp: Date;
+};
+
+/**
+ * @event CreateSuccess Emitted when the connection creation succeeds with the created connection.
+ * @param {MegaPoolConnection} connection - The successfully created connection.
+ */
+
+/**
+ * @event CreateFail Emitted when the connection creation fails.
+ * @param {string} message - The error message indicating the reason for the failure.
+ */
+
+/**
+ * @event CloseSuccess Emitted when the connection closure succeeds.
+ */
+
+/**
+ * @event CloseFail Emitted when the connection closure fails.
+ * @param {_MegaConnection} connection - The connection could not be closed.
+ * @param {string} message - The error message indicating the reason for the failure.
+ */
+
+/**
+ * @event QuerySuccess Emitted when a query execution succeeds with the resulting data.
+ * @param {any} data - The data resulting from the successful query execution.
+ */
+
+/**
+ * @event QueryFail Emitted when a query execution fails.
+ * @param {string} message - The error message indicating the reason for the query failure.
+ */
+
+/**
+ * Connections pooling interface manages connection creation and closing for you
+ * @method request() resolves with a MegaPoolConnection instance
+ *
+ */
+export class MegaPool extends EventEmitter {
+  /**
+   * The pool identifier
+   */
+  private id: Symbol;
+
+  /**
+   * The pool errors
+   */
+  private errors: Array<PoolError>;
+
+  /**
+   * The connections in use
+   */
+  private acquiredConnections: Array<_MegaConnection>;
+
+  /**
+   * The connections free to use
+   */
+  private idleConnectionQ: MemoryQ<_MegaConnection>;
+
+  /**
+   * The queue of connection requests
+   */
+  private connectionRequestQ: MemoryQ<void>;
+
+  /**
+   * The connection configuration options
+   */
+  private connectionOptions: _MegaConnectionOptions;
+
+  /**
+   * The pool configuration options
+   */
+  private poolOptions: _MegaPoolOptions;
+
+  /**
+   * The driver we use to create the connection
+   */
+  private driver: _MegaDriver;
+
+  /**
+   * Tells if the pool did shutdown
+   */
+  private didShutdown: boolean;
+
+  /**
+   * Creates a new instance of MegaPool
+   * @param connectionOptions Connection configuration options
+   * @param poolOptions Pool configuration options
+   * @param driver Instance of _MegaDriver
+   */
+  constructor(
+    connectionOptions: _MegaConnectionOptions,
+    poolOptions?: _MegaPoolOptions,
+    driver?: _MegaDriver
+  ) {
+    super();
+
+    this.setConnectionOptions(connectionOptions);
+    this.setPoolOptions(poolOptions);
+    this.setDriver(driver);
+
+    this.id = Symbol("pool id");
+    this.acquiredConnections = [];
+    this.didShutdown = false;
+    this.errors = new Array();
+
+    this.idleConnectionQ = new MemoryQ(this.poolOptions.maxIdleTime, Infinity);
+
+    this.connectionRequestQ = new MemoryQ(
+      this.poolOptions.maxQueueTime,
+      this.poolOptions.maxQueueSize
+    );
+
+    // close timed out idle connection
+    this.idleConnectionQ.on("MaxQueueTime", (job) => {
+      // close the idle connection and catch CloseConnectionError
+      this.closeConnection(job()).catch((error) => {
+        // console.log(error.message);
+      });
+    });
+
+    // reject timed out connection requests
+    this.connectionRequestQ.on("MaxQueueTime", (job) => job());
+
+    this.on("QueryFail", (message: string) =>
+      this.setError(new QueryFailError(message))
+    );
+  }
+
+  /**
+   * Validate the given options and initialize the pool options
+   * @param options The pool options
+   */
+  private setPoolOptions(options: _MegaPoolOptions): void {
+    if (Test.isUndefined(options)) {
+      this.poolOptions = {
+        maxConnections: 10, // max number of connections
+        maxIdleTime: 60000, // max number of miliseconds the connection can be idle
+        shouldQueue: true, // should queue connection requests
+        maxQueueSize: Infinity, // max number of requests to queue
+        maxQueueTime: 1000, // max number of miliseconds a request can stay in the queue
+        shouldRetry: true, // should retry connection creation and closing connections when they fail
+        maxRetry: 3, // max number of times to retry the opertation
+        retryDelay: 500, // number of miliseconds to wait before each retry attempt (3th after 1500)
+        extraDelay: 500, // number of miliseoncds to add after each delay
+      };
+
+      return;
+    }
+
+    if (!Test.isObject(options)) {
+      throw new MegaPoolError(`The 'poolOptions' argument must be an object`);
+    }
+
+    if (
+      !Test.isInteger(options.maxConnections) ||
+      !Test.isGreaterThan(options.maxConnections, 0)
+    ) {
+      options.maxConnections = 10;
+    }
+
+    if (
+      !Test.isInteger(options.maxIdleTime) ||
+      !Test.isGreaterThan(options.maxIdleTime, 0)
+    ) {
+      options.maxIdleTime = 60000; // 1min
+    }
+
+    if (!Test.isBoolean(options.shouldQueue)) {
+      options.shouldQueue = true; // 1min
+    }
+
+    if (
+      !Test.isInteger(options.maxQueueSize) ||
+      !Test.isGreaterThan(options.maxQueueSize, 0)
+    ) {
+      options.maxQueueSize = Infinity;
+    }
+
+    if (
+      !Test.isInteger(options.maxQueueTime) ||
+      !Test.isGreaterThan(options.maxQueueTime, 0)
+    ) {
+      options.maxQueueTime = 1000; // 1s
+    }
+
+    if (!Test.isBoolean(options.shouldRetry)) {
+      options.shouldRetry = true;
+    }
+
+    if (
+      !Test.isInteger(options.maxRetry) ||
+      !Test.isGreaterThan(options.maxRetry, 0)
+    ) {
+      options.maxRetry = 3;
+    }
+
+    if (
+      !Test.isInteger(options.retryDelay) ||
+      !Test.isGreaterThan(options.retryDelay, 0)
+    ) {
+      options.retryDelay = 500;
+    }
+
+    if (
+      !Test.isInteger(options.extraDelay) ||
+      !Test.isGreaterThanOrEqual(options.extraDelay, 0)
+    ) {
+      options.extraDelay = 500;
+    }
+
+    this.poolOptions = options;
+  }
+
+  /**
+   * Validate the given options and initialize the connection options
+   * @param options The connection options
+   */
+  private setConnectionOptions(options: _MegaConnectionOptions): void {
+    if (!Test.isObject(options)) {
+      throw new MegaPoolError(
+        `The 'connectionOptions' argument must be an object`
+      );
+    }
+
+    this.connectionOptions = options;
+  }
+
+  /**
+   * Vaidate the given driver and initialize it
+   * @param driver The driver to use to create connections
+   */
+  private setDriver(driver: _MegaDriver): void {
+    if (Test.isUndefined(driver)) {
+      this.driver = new MySQLDriver();
+    } else if (Test.isChildOf(driver, MySQLDriver)) {
+      this.driver = driver;
+    }
+
+    throw new MegaPoolError(
+      `The 'driver' argument must be a valid mega driver`
+    );
+  }
+
+  /**
+   * Retry the given job
+   * @param job The job function to execute
+   * @returns Promise resolves with the job's return value
+   */
+  private retry<T>(job: () => T | Promise<T>): Promise<T> {
+    Echo.setMaxRetry(this.poolOptions.maxRetry);
+    Echo.setRetryDelay(this.poolOptions.retryDelay);
+    Echo.setExtraDelay(this.poolOptions.extraDelay);
+    return Echo.retry<T>(job);
+  }
+
+  /**
+   * Is it still possible to create connections
+   */
+  private shouldCreate(): boolean {
+    return (
+      this.acquiredConnections.length + this.idleConnectionQ.size() <
+      this.poolOptions.maxConnections
+    );
+  }
+
+  /**
+   * Is it possible to queue connections requests
+   */
+  private shouldQueue(): boolean {
+    return this.poolOptions.shouldQueue;
+  }
+
+  /**
+   * Is it possible to retry connections
+   */
+  private shouldRetry(): boolean {
+    return this.poolOptions.shouldRetry;
+  }
+
+  /**
+   * Close the given connection
+   * @param connection The connection to be closed
+   * @returns Promise resolves if the connection is closed successfully
+   * @emits CloseFail when the creation fail
+   * @emits CloseSuccess when the connection is closed successfully
+   * @example
+   * // handle closeFail event
+   * this.on('closeFail',(message) => console.log(message))
+   *
+   * // handle CloseSuccess event
+   * this.on('CloseSuccess',() => console.log('close cuccess'))
+   */
+  private closeConnection(connection: _MegaConnection): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const getMessage = (error: any): string => {
+        return Test.isError(error) && Test.isText(error.message)
+          ? error.message
+          : "Failed to close the connection";
+      };
+
+      const rejectAction = (message: string) => {
+        this.emit("CloseFail", connection, message);
+        const error = new CloseConnectionError(message);
+        this.setError(error);
+        reject(error);
+      };
+
+      connection
+        .close()
+        .then(() => {
+          this.emit("CloseSuccess");
+          resolve();
+        })
+        .catch((error) => {
+          if (!this.shouldRetry()) return rejectAction(getMessage(error));
+          this.retry<void>(() => connection.close())
+            .then(() => resolve())
+            .catch((error) => rejectAction(getMessage(error)));
+        });
+    });
+  }
+
+  /**
+   * Create a new connection
+   * @returns Promise resolves with the created connection
+   * @emits CreateFail when the creation fail
+   * @emits CreateSuccess when the connection is created successfully
+   * @example
+   * // handle createFail event
+   * this.on('createFail',(message) => console.log(message))
+   *
+   * // handle createSuccess event
+   * this.on('createSuccess',(connection) => console.log(connection))
+   */
+  private createConnection(): Promise<_MegaConnection> {
+    return new Promise((resolve, reject) => {
+      // to make sure no connection is created after the shutdown
+      if (this.didShutdown) {
+        return reject(
+          new MegaPoolError(
+            `Can't perform any farther operations during shutdown process`
+          )
+        );
+      }
+
+      // creation faluire error message
+      const parseMessage = (error: Error): string => {
+        return Test.isError(error) && Test.isText(error.message)
+          ? error.message
+          : "Failed to create the connection";
+      };
+
+      // reject wwith error when the connection creation fail
+      const rejectAction = (message: string) => {
+        this.emit("CreateFail", message);
+        const error = new CreateConnectionError(message);
+        this.setError(error);
+        reject(error);
+      };
+
+      const create = () => this.driver.createConnection(this.connectionOptions);
+
+      create()
+        .then((connection) => resolve(connection))
+        .catch((error) => {
+          if (!this.shouldRetry()) return rejectAction(parseMessage(error));
+
+          this.retry<_MegaConnection>(create)
+            .then((connection) => resolve(connection))
+            .catch((error) => rejectAction(parseMessage(error)));
+        });
+    });
+  }
+
+  /**
+   * Request a connection from the pool
+   * @returns Promise resolves with a connection
+   * @example
+   * // create new pool
+   * const pool = new MegaPool(connectionOptions)
+   *
+   * // request a connection
+   * const connection = await pool.request()
+   *
+   * // execute queries
+   * await connection.query(sql)
+   * await connection.query(sql,values)
+   *
+   * // release the connection
+   * connection.release()
+   * pool.release(connection)
+   */
+  public request(): Promise<MegaPoolConnection> {
+    return new Promise((resolve, reject) => {
+      if (this.didShutdown) {
+        return reject(
+          new MegaPoolError(
+            `Can't perform any farther operations during shutdown process`
+          )
+        );
+      }
+
+      if (this.hasIdle()) {
+        const connection = this.idleConnectionQ.pull()();
+
+        return connection
+          .isAlive()
+          .then(() => {
+            this.acquiredConnections.push(connection);
+            resolve(new MegaPoolConnection(connection, this));
+          })
+          .catch(() => {
+            return this.closeConnection(connection)
+              .then(() => {
+                return this.request()
+                  .then((connection) => resolve(connection))
+                  .catch((error) => reject(error));
+              })
+              .catch((error) => {
+                return reject(error);
+              });
+          });
+      }
+
+      if (this.shouldCreate()) {
+        return this.createConnection()
+          .then((connection) => {
+            this.acquiredConnections.push(connection);
+            const megaPoolConnection = new MegaPoolConnection(connection, this);
+            this.emit("CreateSuccess", megaPoolConnection);
+            resolve(megaPoolConnection);
+          })
+          .catch((error) => reject(error));
+      }
+
+      if (this.shouldQueue()) {
+        if (this.connectionRequestQ.size() < this.poolOptions.maxQueueSize) {
+          return this.connectionRequestQ.put((connection: _MegaConnection) => {
+            if (Test.isDefined(connection)) {
+              return resolve(new MegaPoolConnection(connection, this));
+            }
+
+            this.emit("MaxQueueTime");
+            this.setError(new MaxQueueTimeError());
+            reject(new MaxQueueTimeError());
+          });
+        }
+
+        this.emit("MaxQueueSize");
+        this.setError(new MaxQueueSizeError());
+        reject(new MaxQueueSizeError());
+        return;
+      }
+
+      this.emit("MaxConnection");
+      this.setError(new MaxConnectionError());
+      reject(new MaxConnectionError());
+    });
+  }
+
+  public query<T>(sql: string, values?: Array<any>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      if (this.didShutdown) {
+        return reject(
+          new MegaPoolError(
+            `Can't perform any farther operations during shutdown process`
+          )
+        );
+      }
+
+      this.request()
+        .then((connection) => {
+          connection
+            .query<T>(sql, values)
+            .then((result) => {
+              connection.release();
+              resolve(result);
+            })
+            .catch((error) => {
+              connection.release();
+              reject(error);
+            });
+        })
+        .catch((error) => reject(error));
+    });
+  }
+
+  public shutdown(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // cant perform any other operation after you execute this method
+      this.didShutdown = true;
+
+      if (this.acquiredConnections.length > 0) {
+        return reject(
+          new MegaPoolError(`Make sure to release all the connections first`)
+        );
+      }
+
+      const connections: Array<Promise<void>> = [];
+
+      if (this.idleConnectionQ.size() > 0) {
+        this.idleConnectionQ.batch().forEach((job) => {
+          connections.push(this.closeConnection(job()));
+        });
+      }
+
+      Promise.all(connections)
+        .then(() => {
+          this.errors = null;
+          this.driver = null;
+          this.poolOptions = null;
+          this.connectionOptions = null;
+          this.removeAllListeners();
+
+          this.connectionRequestQ.removeAllListeners();
+          this.connectionRequestQ = null;
+
+          this.idleConnectionQ.removeAllListeners();
+          this.idleConnectionQ = null;
+
+          resolve();
+        })
+        // if the shutdown reject you should solve the problem and try again
+        .catch((error) => reject(error));
+    });
+  }
+
+  /**
+   * Register the given error in the pull
+   * @param error Instance of Error
+   */
+  public setError(error: Error): void {
+    if (!Test.isChildOf(error, Error)) {
+      throw new MegaPoolError("The error must be an instance of Error");
+    }
+
+    if (!Test.isText(error.name)) {
+      throw new MegaPoolError("The error name must be a string");
+    }
+
+    if (!Test.isText(error.message)) {
+      throw new MegaPoolError("The error message must be a string");
+    }
+
+    this.errors.push({
+      id: this.id,
+      name: error.name,
+      message: error.message,
+      timestamp: new Date(),
+    });
+  }
+
+  public getErrors(): PoolError[] {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.errors;
+  }
+
+  public getPoolOptions(): _MegaPoolOptions {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.poolOptions;
+  }
+
+  public getConnectionOptions(): _MegaConnectionOptions {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.connectionOptions;
+  }
+
+  public getDriver(): _MegaDriver {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.driver;
+  }
+
+  public getAquiredCount(): number {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+    return this.acquiredConnections.length;
+  }
+
+  public getIdleCount(): number {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.idleConnectionQ.size();
+  }
+
+  public getQueuedCount(): number {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.connectionRequestQ.size();
+  }
+
+  public hasAcquired(): boolean {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.acquiredConnections.length > 0;
+  }
+
+  public hasIdle(): boolean {
+    if (this.didShutdown) {
+      throw new MegaPoolError(
+        `Can't perform any farther operations during shutdown process`
+      );
+    }
+
+    return this.idleConnectionQ.size() > 0;
+  }
+
+  public release(connection: MegaPoolConnection): void {
+    if (!Test.isChildOf(connection, MegaPoolConnection)) {
+      throw new MegaPoolError(
+        "The connection must be instance of MegaPoolConnection"
+      );
+    }
+
+    if (this.connectionRequestQ.hasJob()) {
+      const job = this.connectionRequestQ.pull();
+      return job(connection); // resolve the request with the connectin
+    }
+
+    const con = this.acquiredConnections.find(
+      (value: _MegaConnection) => value.id === connection.id
+    );
+
+    // The aquired connection becomes idle
+    this.idleConnectionQ.put(() => con);
+  }
+}

@@ -1,0 +1,1 @@
+=> make _Megaconnection.query(sql,values) return a specific type
