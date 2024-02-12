@@ -1,21 +1,19 @@
-import { Connection } from 'mysql2/promise';
-import { _MegaConnection } from '../../interfaces/_MegaConnection';
-import { CreateConnectionError } from '../../../../errors/mega/CreateConnectionError';
-import { Test } from '../../../utils/Test';
-import { MySQLConnectionError } from '../../../../errors/mega/drivers/MySQLConnectionError';
+import { Connection } from "mysql2/promise";
+import { _MegaConnection } from "../../interfaces/_MegaConnection";
+import { CreateConnectionError } from "../../../../errors/mega/CreateConnectionError";
+import { Test } from "../../../utils/Test";
+import { MySQLConnectionError } from "../../../../errors/mega/drivers/MySQLConnectionError";
 
 export class MySQLConnection implements _MegaConnection {
-
-    /**
+  /**
    * The Instance identifier
    */
-    public id: Symbol;
+  public id: Symbol;
 
   /**
    * The Inner MySQL Connection
    */
   private connection: Connection;
-
 
   /**
    * Creates an instance of MySQLConnection
@@ -29,7 +27,7 @@ export class MySQLConnection implements _MegaConnection {
     }
 
     this.connection = connection;
-    this.id = Symbol('MySQL connection id');
+    this.id = Symbol("MySQL connection id");
   }
 
   /**
@@ -52,6 +50,19 @@ export class MySQLConnection implements _MegaConnection {
    */
   public query<T>(sql: string, values?: any[]): Promise<T> {
     return new Promise((resolve, reject) => {
+      if (!Test.isText(sql)) {
+        return reject(
+          new MySQLConnectionError("The sql argument must be string")
+        );
+      }
+
+      if (!Test.isArray(values) && !Test.isUndefined(values)) {
+        return reject(
+          new MySQLConnectionError(
+            "The values argument must be an array of values"
+          )
+        );
+      }
       resolve(this.connection.execute(sql, values) as Promise<T>);
     });
   }
@@ -62,12 +73,21 @@ export class MySQLConnection implements _MegaConnection {
    */
   public close(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.connection.end().then(() => {
-        this.isAlive = () => Promise.reject(new MySQLConnectionError('Connection have been closed'));
-        this.query = () => Promise.reject(new MySQLConnectionError('Connection have been closed'));        
-        this.connection = null;
-        resolve()
-      }).catch((err) => reject(err))
+      this.connection
+        .end()
+        .then(() => {
+          this.isAlive = () =>
+            Promise.reject(
+              new MySQLConnectionError("Connection have been closed")
+            );
+          this.query = () =>
+            Promise.reject(
+              new MySQLConnectionError("Connection have been closed")
+            );
+          this.connection = null;
+          resolve();
+        })
+        .catch((err) => reject(err));
     });
   }
 
@@ -79,7 +99,7 @@ export class MySQLConnection implements _MegaConnection {
   public isAlive(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.connection
-        .query('SELECT 1')
+        .query("SELECT 1")
         .then(() => resolve())
         .catch(() => reject());
     });

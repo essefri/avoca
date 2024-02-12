@@ -18,7 +18,7 @@ import { MaxConnectionError } from "../../../errors/mega/MaxConnectionError";
 import { MegaPoolError } from "../../../errors/mega/dev/MegaPoolError";
 import { MaxQueueTimeError } from "../../../errors/mega/MaxQueueTimeError";
 import { MaxQueueSizeError } from "../../../errors/mega/MaxQueueSizeError";
-import { QueryFailError } from "../../../errors/mega/QueryFailError";
+import { PoolOptions } from "mysql2";
 
 export type PoolError = {
   id: Symbol;
@@ -141,10 +141,6 @@ export class MegaPool extends EventEmitter {
 
     // reject timed out connection requests
     this.connectionRequestQ.on("MaxQueueTime", (job) => job());
-
-    this.on("QueryFail", (message: string) =>
-      this.setError(new QueryFailError(message))
-    );
   }
 
   /**
@@ -429,7 +425,9 @@ export class MegaPool extends EventEmitter {
       if (this.shouldCreate()) {
         return this.createConnection()
           .then((connection) => {
+            // save the connection locally in the pool
             this.acquiredConnections.push(connection);
+            // create a MegaPoolConnection
             const megaPoolConnection = new MegaPoolConnection(connection, this);
             this.emit("CreateSuccess", megaPoolConnection);
             resolve(megaPoolConnection);
@@ -513,6 +511,10 @@ export class MegaPool extends EventEmitter {
     });
   }
 
+  /**
+   * Shutdown the pool by closing all connections and dereferencing values
+   * @returns Promise resolves when the shutdown operation successed
+   */
   public shutdown(): Promise<void> {
     return new Promise((resolve, reject) => {
       const connections: Array<Promise<void>> = [];
@@ -531,6 +533,7 @@ export class MegaPool extends EventEmitter {
 
       Promise.all(connections)
         .then(() => {
+          this.errors = null;
           this.driver = null;
           this.poolOptions = null;
           this.connectionOptions = null;
@@ -602,38 +605,71 @@ export class MegaPool extends EventEmitter {
   }
 
   /**
-   * Register the given error in the pull
-   * @param error Instance of Error
+   * get all the errors in the pool
    */
   public getErrors(): PoolError[] {
     return this.errors;
   }
 
   /**
-   * Register the given error in the pull
-   * @param error Instance of Error
+   * get acquired connections count
    */
   public getAcquiredCount(): number {
     return this.acquiredConnections.length;
   }
 
+  /**
+   * get idle connections count
+   */
   public getIdleCount(): number {
     return this.idleConnectionQ.size();
   }
 
+  /**
+   * get current connection requests count
+   */
   public getRequestCount(): number {
     return this.connectionRequestQ.size();
   }
 
+  /**
+   * Tells if the pool has acquired connections
+   */
   public hasAcquired(): boolean {
     return this.acquiredConnections.length > 0;
   }
 
+  /**
+   * Tells if the pool has idle connections
+   */
   public hasIdle(): boolean {
     return this.idleConnectionQ.size() > 0;
   }
 
+  /**
+   * Tells if the pool has connection requests
+   */
   public hasRequest(): boolean {
     return this.connectionRequestQ.size() > 0;
+  }
+
+  /**
+   * Get the current pool options
+   */
+  public getPoolOptions(): _MegaPoolOptions {
+    return this.poolOptions;
+  }
+
+  /**
+   * Get the current connection options
+   */
+  public getConnectionOptions(): _MegaConnectionOptions {
+    return this.connectionOptions;
+  }
+  /**
+   * Get the pool driver instance
+   */
+  public getDriver(): _MegaDriver {
+    return this.driver;
   }
 }

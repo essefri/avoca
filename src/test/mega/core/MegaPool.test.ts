@@ -1,23 +1,23 @@
-jest.mock('../../../modules/mega/drivers/MySQL/MySQLConnection');
-jest.mock('../../../modules/mega/drivers/MySQL/MySQLDriver');
-jest.mock('../../../modules/Echo');
+jest.mock("../../../modules/mega/drivers/MySQL/MySQLConnection");
+jest.mock("../../../modules/mega/drivers/MySQL/MySQLDriver");
+jest.mock("../../../modules/Echo");
 
-import { MegaPool } from '../../../modules/mega/core/MegaPool';
-import { MegaPoolConnection } from '../../../modules/mega/core/MegaPoolConnection';
+import { MegaPool } from "../../../modules/mega/core/MegaPool";
+import { MegaPoolConnection } from "../../../modules/mega/core/MegaPoolConnection";
 
-import { Echo } from '../../../modules/utils/Echo';
+import { Echo } from "../../../modules/utils/Echo";
 
-import { MySQLConnection } from '../../../modules/mega/drivers/MySQL/MySQLConnection';
-import { MySQLDriver } from '../../../modules/mega/drivers/MySQL/MySQLDriver';
+import { MySQLConnection } from "../../../modules/mega/drivers/MySQL/MySQLConnection";
+import { MySQLDriver } from "../../../modules/mega/drivers/MySQL/MySQLDriver";
 
-import { CreateConnectionError } from '../../../errors/mega/CreateConnectionError';
-import { CloseConnectionError } from '../../../errors/mega/CloseConnectionError';
-import { MaxQueueSizeError } from '../../../errors/mega/MaxQueueSizeError';
-import { MaxConnectionError } from '../../../errors/mega/MaxConnectionError';
-import { MaxQueueTimeError } from '../../../errors/mega/MaxQueueTimeError';
-import { QueryFailError } from '../../../errors/mega/QueryFailError';
-import { MegaPoolError } from '../../../errors/mega/dev/MegaPoolError';
-import { _MegaConnection } from '../../../modules/mega/interfaces/_MegaConnection';
+import { CreateConnectionError } from "../../../errors/mega/CreateConnectionError";
+import { CloseConnectionError } from "../../../errors/mega/CloseConnectionError";
+import { MaxQueueSizeError } from "../../../errors/mega/MaxQueueSizeError";
+import { MaxConnectionError } from "../../../errors/mega/MaxConnectionError";
+import { MaxQueueTimeError } from "../../../errors/mega/MaxQueueTimeError";
+import { QueryFailError } from "../../../errors/mega/QueryFailError";
+import { MegaPoolError } from "../../../errors/mega/dev/MegaPoolError";
+import { _MegaConnection } from "../../../modules/mega/interfaces/_MegaConnection";
 
 let driver = new MySQLDriver();
 
@@ -25,8 +25,8 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('MegaPool.constructor', () => {
-  it('connectionOptions are required', () => {
+describe("MegaPool.constructor", () => {
+  it("connectionOptions are required", () => {
     expect(() => new MegaPool(undefined)).toThrow(
       `The 'connectionOptions' argument must be an object`
     );
@@ -34,8 +34,8 @@ describe('MegaPool.constructor', () => {
     expect(() => new MegaPool({})).not.toThrow();
   });
 
-  describe('PoolOptions', () => {
-    it('poolOptions are optional', () => {
+  describe("PoolOptions", () => {
+    it("poolOptions are optional", () => {
       expect(() => new MegaPool({})).not.toThrow();
       expect(() => new MegaPool({}, undefined)).not.toThrow();
       expect(new MegaPool({}).getPoolOptions()).toMatchObject({
@@ -51,7 +51,7 @@ describe('MegaPool.constructor', () => {
       });
     });
 
-    it('poolOptions must be an object', () => {
+    it("poolOptions must be an object", () => {
       expect(() => new MegaPool({}, [] as any)).toThrow(
         `The 'poolOptions' argument must be an object`
       );
@@ -61,13 +61,13 @@ describe('MegaPool.constructor', () => {
       expect(() => new MegaPool({}, {})).not.toThrow();
     });
 
-    it('maxConnections must be an integer > 0', () => {
+    it("maxConnections must be an integer > 0", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { maxConnections: 0 }).getPoolOptions().maxConnections
       ).toBe(10);
       expect(
-        new MegaPool({}, { maxConnections: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { maxConnections: "any" as any }).getPoolOptions()
           .maxConnections
       ).toBe(10);
       expect(
@@ -75,13 +75,13 @@ describe('MegaPool.constructor', () => {
       ).toBe(5);
     });
 
-    it('maxIdleTime must be an integer > 0', () => {
+    it("maxIdleTime must be an integer > 0", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { maxIdleTime: 0 }).getPoolOptions().maxIdleTime
       ).toBe(60000);
       expect(
-        new MegaPool({}, { maxIdleTime: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { maxIdleTime: "any" as any }).getPoolOptions()
           .maxIdleTime
       ).toBe(60000);
       expect(
@@ -89,13 +89,13 @@ describe('MegaPool.constructor', () => {
       ).toBe(1000);
     });
 
-    it('shouldQueue must be a boolean', () => {
+    it("shouldQueue must be a boolean", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { shouldQueue: 0 as any }).getPoolOptions().shouldQueue
       ).toBe(true);
       expect(
-        new MegaPool({}, { shouldQueue: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { shouldQueue: "any" as any }).getPoolOptions()
           .shouldQueue
       ).toBe(true);
 
@@ -104,7 +104,7 @@ describe('MegaPool.constructor', () => {
       ).toBe(false);
     });
 
-    it('maxQueueSize must be an integer > 0', () => {
+    it("maxQueueSize must be an integer > 0", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { maxQueueSize: 0 as any }).getPoolOptions()
@@ -112,7 +112,7 @@ describe('MegaPool.constructor', () => {
       ).toBe(Infinity);
 
       expect(
-        new MegaPool({}, { maxQueueSize: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { maxQueueSize: "any" as any }).getPoolOptions()
           .maxQueueSize
       ).toBe(Infinity);
 
@@ -126,7 +126,7 @@ describe('MegaPool.constructor', () => {
       ).toBe(12);
     });
 
-    it('maxQueueTime must be an integer > 0', () => {
+    it("maxQueueTime must be an integer > 0", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { maxQueueTime: 0 as any }).getPoolOptions()
@@ -134,7 +134,7 @@ describe('MegaPool.constructor', () => {
       ).toBe(1000);
 
       expect(
-        new MegaPool({}, { maxQueueTime: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { maxQueueTime: "any" as any }).getPoolOptions()
           .maxQueueTime
       ).toBe(1000);
 
@@ -143,14 +143,14 @@ describe('MegaPool.constructor', () => {
       ).toBe(2000);
     });
 
-    it('shouldRetry must be a boolean', () => {
+    it("shouldRetry must be a boolean", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { shouldRetry: 0 as any }).getPoolOptions().shouldRetry
       ).toBe(true);
 
       expect(
-        new MegaPool({}, { shouldRetry: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { shouldRetry: "any" as any }).getPoolOptions()
           .shouldRetry
       ).toBe(true);
 
@@ -159,14 +159,14 @@ describe('MegaPool.constructor', () => {
       ).toBe(false);
     });
 
-    it('maxRetry must be an integer > 0', () => {
+    it("maxRetry must be an integer > 0", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { maxRetry: 0 as any }).getPoolOptions().maxRetry
       ).toBe(3);
 
       expect(
-        new MegaPool({}, { maxRetry: 'any' as any }).getPoolOptions().maxRetry
+        new MegaPool({}, { maxRetry: "any" as any }).getPoolOptions().maxRetry
       ).toBe(3);
 
       expect(new MegaPool({}, { maxRetry: 6 }).getPoolOptions().maxRetry).toBe(
@@ -174,14 +174,14 @@ describe('MegaPool.constructor', () => {
       );
     });
 
-    it('retryDelay must be an integer > 0', () => {
+    it("retryDelay must be an integer > 0", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { retryDelay: 0 as any }).getPoolOptions().retryDelay
       ).toBe(500);
 
       expect(
-        new MegaPool({}, { retryDelay: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { retryDelay: "any" as any }).getPoolOptions()
           .retryDelay
       ).toBe(500);
 
@@ -190,14 +190,14 @@ describe('MegaPool.constructor', () => {
       ).toBe(1000);
     });
 
-    it('extraDelay must be an integer >= 0', () => {
+    it("extraDelay must be an integer >= 0", () => {
       // default value is used in case the argument is invalid
       expect(
         new MegaPool({}, { extraDelay: -1 as any }).getPoolOptions().extraDelay
       ).toBe(500);
 
       expect(
-        new MegaPool({}, { extraDelay: 'any' as any }).getPoolOptions()
+        new MegaPool({}, { extraDelay: "any" as any }).getPoolOptions()
           .extraDelay
       ).toBe(500);
 
@@ -207,17 +207,17 @@ describe('MegaPool.constructor', () => {
     });
   });
 
-  describe('driver', () => {
-    it('driver is optional', () => {
+  describe("driver", () => {
+    it("driver is optional", () => {
       expect(() => new MegaPool({}, undefined, undefined)).not.toThrow();
-      //   MySQLDriver is used as a default driver
+      // MySQLDriver is used as a default driver
       expect(new MegaPool({}).getDriver()).toBeInstanceOf(MySQLDriver);
       expect(
         new MegaPool({}, undefined, new MySQLDriver()).getDriver()
       ).toBeInstanceOf(MySQLDriver);
     });
 
-    it('driver must be a valid mega driver', () => {
+    it("driver must be a valid mega driver", () => {
       expect(() => new MegaPool({}, undefined, [] as any)).toThrow(
         `The 'driver' argument must be a valid mega driver`
       );
@@ -225,25 +225,25 @@ describe('MegaPool.constructor', () => {
         `The 'driver' argument must be a valid mega driver`
       );
 
-      expect(() => new MegaPool({}, undefined, 'driver' as any)).toThrow(
+      expect(() => new MegaPool({}, undefined, "driver" as any)).toThrow(
         `The 'driver' argument must be a valid mega driver`
       );
     });
   });
 
-  it('should register a ConnectionRelease event hanlder', () => {
+  it("should register a ConnectionRelease event hanlder", () => {
     const pool = new MegaPool({});
-    expect(pool.eventNames().includes('ConnectionRelease')).toBe(true);
+    expect(pool.eventNames().includes("ConnectionRelease")).toBe(true);
   });
 });
 
-describe('MegaPool.request', () => {
-  describe('Create Connection Tests', () => {
-    it('should successfully create a connection, emits an event, and resolves', async () => {
+describe("MegaPool.request", () => {
+  describe("Create Connection Tests", () => {
+    it("should successfully create a connection, emits an event, and resolves", async () => {
       const pool = new MegaPool({}, undefined, driver);
 
       const action = jest.fn();
-      pool.on('CreateSuccess', action);
+      pool.on("CreateSuccess", action);
 
       const connection1 = await pool.request();
 
@@ -257,12 +257,12 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should fail to create a connection, emits an event, and rejects', async () => {
+    it("should fail to create a connection, emits an event, and rejects", async () => {
       // retry is not allowed
       const pool = new MegaPool({}, { shouldRetry: false }, driver);
 
       const action = jest.fn();
-      pool.on('CreateFail', action);
+      pool.on("CreateFail", action);
 
       // connection creation rejects for now reason
       (driver.createConnection as jest.Mock).mockImplementationOnce(() =>
@@ -275,11 +275,11 @@ describe('MegaPool.request', () => {
 
       expect(driver.createConnection).toHaveBeenCalledTimes(1);
       expect(action).toHaveBeenCalledTimes(1);
-      expect(action).toHaveBeenCalledWith('Failed to create the connection');
+      expect(action).toHaveBeenCalledWith("Failed to create the connection");
       expect(pool.getErrors().length).toBe(1);
-      expect(pool.getErrors()[0].name).toBe('CreateConnectionError');
+      expect(pool.getErrors()[0].name).toBe("CreateConnectionError");
       expect(pool.getErrors()[0].message).toBe(
-        'Failed to create the connection'
+        "Failed to create the connection"
       );
 
       (driver.createConnection as jest.Mock).mockClear();
@@ -287,7 +287,7 @@ describe('MegaPool.request', () => {
 
       // connection creation rejects for a reason
       (driver.createConnection as jest.Mock).mockImplementationOnce(() =>
-        Promise.reject(new Error('message'))
+        Promise.reject(new Error("message"))
       );
 
       await expect(pool.request()).rejects.toBeInstanceOf(
@@ -296,16 +296,16 @@ describe('MegaPool.request', () => {
 
       expect(driver.createConnection).toHaveBeenCalledTimes(1);
       expect(action).toHaveBeenCalledTimes(1);
-      expect(action).toHaveBeenCalledWith('message');
+      expect(action).toHaveBeenCalledWith("message");
       expect(pool.getErrors().length).toBe(2);
-      expect(pool.getErrors()[1].name).toBe('CreateConnectionError');
-      expect(pool.getErrors()[1].message).toBe('message');
+      expect(pool.getErrors()[1].name).toBe("CreateConnectionError");
+      expect(pool.getErrors()[1].message).toBe("message");
 
       // clean up
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should fail to create a connection, retry, emits an event, and resolves', async () => {
+    it("should fail to create a connection, retry, emits an event, and resolves", async () => {
       // retry is allowed
       const pool = new MegaPool(
         {},
@@ -314,7 +314,7 @@ describe('MegaPool.request', () => {
       );
 
       const action = jest.fn();
-      pool.on('CreateSuccess', action);
+      pool.on("CreateSuccess", action);
 
       // connection creation rejects 2 times
       (driver.createConnection as jest.Mock)
@@ -341,7 +341,7 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should fail to create a connection, retry, emits an event, and rejects', async () => {
+    it("should fail to create a connection, retry, emits an event, and rejects", async () => {
       // retry is allowed
       const pool = new MegaPool(
         {},
@@ -350,14 +350,14 @@ describe('MegaPool.request', () => {
       );
 
       const action = jest.fn();
-      pool.on('CreateFail', action);
+      pool.on("CreateFail", action);
 
       // connection creation rejects 2 times
       (driver.createConnection as jest.Mock)
         // creation fail
         .mockImplementationOnce(() => Promise.reject())
         // first retry fail and rejects
-        .mockImplementationOnce(() => Promise.reject(new Error('message')));
+        .mockImplementationOnce(() => Promise.reject(new Error("message")));
 
       await expect(pool.request()).rejects.toBeInstanceOf(
         CreateConnectionError
@@ -365,21 +365,21 @@ describe('MegaPool.request', () => {
       expect(driver.createConnection).toHaveBeenCalledTimes(2);
 
       expect(action).toHaveBeenCalledTimes(1);
-      expect(action).toHaveBeenCalledWith('message');
+      expect(action).toHaveBeenCalledWith("message");
 
       expect(Echo.retry).toHaveBeenCalledTimes(1);
 
       expect(pool.getErrors().length).toBe(1);
-      expect(pool.getErrors()[0].name).toBe('CreateConnectionError');
-      expect(pool.getErrors()[0].message).toBe('message');
+      expect(pool.getErrors()[0].name).toBe("CreateConnectionError");
+      expect(pool.getErrors()[0].message).toBe("message");
 
       // clean up
       expect(await pool.shutdown()).resolves;
     });
   });
 
-  describe('Idle Connection Tests', () => {
-    it('should resolve when the idle connection only when its still alive', async () => {
+  describe("Idle Connection Tests", () => {
+    it("should resolve when the idle connection only when its still alive", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure the connection is still alive
@@ -405,7 +405,7 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should close a dead idle connection, resolve with a new created connection', async () => {
+    it("should close a dead idle connection, resolve with a new created connection", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure all connections are dead
@@ -416,7 +416,7 @@ describe('MegaPool.request', () => {
 
       const pool = new MegaPool({}, undefined, driver);
       const action = jest.fn();
-      pool.on('CloseSuccess', action);
+      pool.on("CloseSuccess", action);
 
       // create a connection
       const connection1 = await pool.request();
@@ -444,7 +444,7 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should close a dead idle connection, resolve with another alive idle connection', async () => {
+    it("should close a dead idle connection, resolve with another alive idle connection", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure only the first idle connection is dead
@@ -483,14 +483,14 @@ describe('MegaPool.request', () => {
 
       // now we have now idle connections
       // becoause one is closed and another one is aqcuired
-      expect(pool.getAquiredCount()).toBe(1);
+      expect(pool.getAcquiredCount()).toBe(1);
       expect(pool.getIdleCount()).toBe(0);
 
       connection3.release();
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should close all dead idle connections, resolve with a new created connection', async () => {
+    it("should close all dead idle connections, resolve with a new created connection", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure all connections are dead
@@ -529,7 +529,7 @@ describe('MegaPool.request', () => {
 
       // now we have now idle connections
       // becoause one is closed and another one is aqcuired
-      expect(pool.getAquiredCount()).toBe(1);
+      expect(pool.getAcquiredCount()).toBe(1);
       expect(pool.getIdleCount()).toBe(0);
 
       // the acquired connection is new created connection
@@ -540,7 +540,7 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should close all dead idle connections, reject with CreateConnectionError', async () => {
+    it("should close all dead idle connections, reject with CreateConnectionError", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure all connections are dead
@@ -550,13 +550,13 @@ describe('MegaPool.request', () => {
       MySQLConn.close = jest.fn(() => Promise.resolve());
 
       (driver.createConnection as jest.Mock)
-        .mockRejectedValue(new Error('message'))
+        .mockRejectedValue(new Error("message"))
         .mockResolvedValueOnce(MySQLConn)
         .mockResolvedValueOnce(MySQLConn);
 
       const pool = new MegaPool({}, undefined, driver);
       const action = jest.fn();
-      pool.on('CloseSuccess', action);
+      pool.on("CloseSuccess", action);
 
       // create two idle connections
       const connection1 = await pool.request();
@@ -574,25 +574,25 @@ describe('MegaPool.request', () => {
       pool.request().catch((error) => {
         expect(error).toBeInstanceOf(CreateConnectionError);
         expect(pool.getIdleCount()).toBe(0);
-        expect(pool.getAquiredCount()).toBe(0);
+        expect(pool.getAcquiredCount()).toBe(0);
         expect(action).toHaveBeenCalledTimes(2);
       });
     });
 
-    it('should fail to close a dead idle connection, and reject', async () => {
+    it("should fail to close a dead idle connection, and reject", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure all connections are dead
       MySQLConn.isAlive = jest.fn(() => Promise.reject());
 
       // make closing the connection fails
-      MySQLConn.close = jest.fn(() => Promise.reject(new Error('message')));
+      MySQLConn.close = jest.fn(() => Promise.reject(new Error("message")));
 
       (driver.createConnection as jest.Mock).mockResolvedValue(MySQLConn);
 
       const pool = new MegaPool({}, { shouldRetry: false }, driver);
       const action = jest.fn();
-      pool.on('CloseFail', action);
+      pool.on("CloseFail", action);
 
       // create two idle connections
       const connection1 = await pool.request();
@@ -617,13 +617,13 @@ describe('MegaPool.request', () => {
 
       // now we have one idle connection left
       // the other one could not be closed and dereferenced
-      expect(pool.getAquiredCount()).toBe(0);
+      expect(pool.getAcquiredCount()).toBe(0);
       expect(pool.getIdleCount()).toBe(1);
 
       // the pool registed a CloseConnectionError for the admin
       expect(pool.getErrors().length).toBe(1);
-      expect(pool.getErrors()[0].name).toBe('CloseConnectionError');
-      expect(pool.getErrors()[0].message).toBe('message');
+      expect(pool.getErrors()[0].name).toBe("CloseConnectionError");
+      expect(pool.getErrors()[0].message).toBe("message");
 
       // the pool emits a CloseConnection event for the admin to handle this case
       expect(action).toHaveBeenCalledTimes(1);
@@ -635,7 +635,7 @@ describe('MegaPool.request', () => {
       }
     });
 
-    it('should fail to close a dead idle connection, retry successfully, and resolve', async () => {
+    it("should fail to close a dead idle connection, retry successfully, and resolve", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure the first connection is dead
@@ -678,7 +678,7 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should fail to close a dead idle connection, retry but fail again, and reject', async () => {
+    it("should fail to close a dead idle connection, retry but fail again, and reject", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       // make sure the all connections are dead
@@ -713,7 +713,7 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should close idle connections after MaxIdleTime and succeed', async () => {
+    it("should close idle connections after MaxIdleTime and succeed", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       MySQLConn.isAlive = jest.fn(() => Promise.resolve());
@@ -731,7 +731,7 @@ describe('MegaPool.request', () => {
 
       const action = jest.fn();
 
-      pool.on('CloseSuccess', action);
+      pool.on("CloseSuccess", action);
       jest.useFakeTimers();
 
       const connection1 = await pool.request();
@@ -757,7 +757,7 @@ describe('MegaPool.request', () => {
       });
     });
 
-    it('should close idle connections after MaxIdleTime and fail', async () => {
+    it("should close idle connections after MaxIdleTime and fail", async () => {
       const MySQLConn = new MySQLConnection({} as any);
 
       MySQLConn.isAlive = jest.fn(() => Promise.resolve());
@@ -775,7 +775,7 @@ describe('MegaPool.request', () => {
 
       const action = jest.fn();
 
-      pool.on('CloseFail', action);
+      pool.on("CloseFail", action);
       jest.useFakeTimers();
 
       const connection1 = await pool.request();
@@ -802,14 +802,14 @@ describe('MegaPool.request', () => {
         expect(action).toHaveBeenCalledTimes(3);
         expect(pool.getErrors().length).toBe(3);
         expect(
-          pool.getErrors().every((err) => err.name === 'CloseConnectionError')
+          pool.getErrors().every((err) => err.name === "CloseConnectionError")
         ).toBe(true);
       });
     });
   });
 
-  describe('Queue Connection Tests', () => {
-    it('should queue connection requests and resolve when ever an idle connection is avaliable', async () => {
+  describe("Queue Connection Tests", () => {
+    it("should queue connection requests and resolve when ever an idle connection is avaliable", async () => {
       (driver.createConnection as jest.Mock).mockResolvedValue(
         new MySQLConnection(undefined)
       );
@@ -822,23 +822,23 @@ describe('MegaPool.request', () => {
       // request a connection
       const connection1 = await pool.request();
 
-      expect(pool.getAquiredCount()).toBe(1);
-      expect(pool.getQueuedCount()).toBe(0);
+      expect(pool.getAcquiredCount()).toBe(1);
+      expect(pool.getRequestCount()).toBe(0);
 
       // request for another connection
       const connection2 = pool.request();
 
-      expect(pool.getAquiredCount()).toBe(1);
-      expect(pool.getQueuedCount()).toBe(1);
+      expect(pool.getAcquiredCount()).toBe(1);
+      expect(pool.getRequestCount()).toBe(1);
 
       // make an idle connection avaliable
       connection1.release();
 
-      expect(pool.getAquiredCount()).toBe(1);
-      expect(pool.getQueuedCount()).toBe(0);
+      expect(pool.getAcquiredCount()).toBe(1);
+      expect(pool.getRequestCount()).toBe(0);
     });
 
-    it('should reject with MaxQueueTimeError if the connection requests are queued longer than MaxQueueTime option', async () => {
+    it("should reject with MaxQueueTimeError if the connection requests are queued longer than MaxQueueTime option", async () => {
       (driver.createConnection as jest.Mock).mockResolvedValue(
         new MySQLConnection(undefined)
       );
@@ -855,13 +855,13 @@ describe('MegaPool.request', () => {
       );
 
       const action = jest.fn();
-      pool.on('MaxQueueTime', action);
+      pool.on("MaxQueueTime", action);
 
       // request a connection
       const connection1 = await pool.request();
 
-      expect(pool.getAquiredCount()).toBe(1);
-      expect(pool.getQueuedCount()).toBe(0);
+      expect(pool.getAcquiredCount()).toBe(1);
+      expect(pool.getRequestCount()).toBe(0);
 
       jest.useFakeTimers();
 
@@ -870,15 +870,15 @@ describe('MegaPool.request', () => {
         expect(error).toBeInstanceOf(MaxQueueTimeError);
       });
 
-      expect(pool.getAquiredCount()).toBe(1);
-      expect(pool.getQueuedCount()).toBe(1);
+      expect(pool.getAcquiredCount()).toBe(1);
+      expect(pool.getRequestCount()).toBe(1);
 
       // advance timers
       jest.advanceTimersByTime(1000);
 
       // register error check
       expect(pool.getErrors().length).toBe(1);
-      expect(pool.getErrors()[0].name).toBe('MaxQueueTimeError');
+      expect(pool.getErrors()[0].name).toBe("MaxQueueTimeError");
 
       // emit event check
       expect(action).toHaveBeenCalledTimes(1);
@@ -888,7 +888,7 @@ describe('MegaPool.request', () => {
       expect(await pool.shutdown()).resolves;
     });
 
-    it('should reject with MaxQueueSizeError if the connection requests are more than the MaxQueueSize option', async () => {
+    it("should reject with MaxQueueSizeError if the connection requests are more than the MaxQueueSize option", async () => {
       const pool = new MegaPool(
         {},
         {
@@ -902,13 +902,13 @@ describe('MegaPool.request', () => {
       );
 
       const action = jest.fn();
-      pool.on('MaxQueueSize', action);
+      pool.on("MaxQueueSize", action);
 
       // request a connection
       const connection1 = await pool.request();
 
-      expect(pool.getAquiredCount()).toBe(1);
-      expect(pool.getQueuedCount()).toBe(0);
+      expect(pool.getAcquiredCount()).toBe(1);
+      expect(pool.getRequestCount()).toBe(0);
 
       jest.useFakeTimers();
 
@@ -916,8 +916,8 @@ describe('MegaPool.request', () => {
       const connection2 = pool.request();
 
       // now we have 1 aquired 1 request queued
-      expect(pool.getAquiredCount()).toBe(1);
-      expect(pool.getQueuedCount()).toBe(1);
+      expect(pool.getAcquiredCount()).toBe(1);
+      expect(pool.getRequestCount()).toBe(1);
 
       // request for another connection
       pool.request().catch((error) => {
@@ -926,7 +926,7 @@ describe('MegaPool.request', () => {
         expect(error).toBeInstanceOf(MaxQueueSizeError);
         // register error check
         expect(pool.getErrors().length).toBe(1);
-        expect(pool.getErrors()[0].name).toBe('MaxQueueSizeError');
+        expect(pool.getErrors()[0].name).toBe("MaxQueueSizeError");
 
         // emit event check
         expect(action).toHaveBeenCalledTimes(1);
@@ -944,7 +944,7 @@ describe('MegaPool.request', () => {
     });
   });
 
-  it('should reject with a MaxConnectionError the connection have been made by the pool are more than MaxConnections', async () => {
+  it("should reject with a MaxConnectionError the connection have been made by the pool are more than MaxConnections", async () => {
     const pool = new MegaPool(
       {},
       { shouldQueue: false, maxConnections: 1 },
@@ -954,30 +954,30 @@ describe('MegaPool.request', () => {
     const connection = await pool.request();
 
     expect(driver.createConnection).toHaveBeenCalledTimes(1);
-    expect(pool.getAquiredCount()).toBe(1);
+    expect(pool.getAcquiredCount()).toBe(1);
     expect(pool.getIdleCount()).toBe(0);
-    expect(pool.getQueuedCount()).toBe(0);
+    expect(pool.getRequestCount()).toBe(0);
 
     await expect(pool.request()).rejects.toBeInstanceOf(MaxConnectionError);
   });
 });
 
-describe('MegaPool.query', () => {
-  it('should resolve', () => {
+describe("MegaPool.query", () => {
+  it("should resolve", () => {
     const connection = new MySQLConnection(undefined);
-    connection.query = jest.fn((): any => Promise.resolve('data'));
+    connection.query = jest.fn((): any => Promise.resolve("data"));
     (driver.createConnection as jest.Mock).mockResolvedValue(connection);
     const pool = new MegaPool({}, undefined, driver);
     const action = jest.fn();
-    pool.on('QuerySuccess', action);
-    pool.query('sql').then((data) => {
-      expect(data).toBe('data');
+    pool.on("QuerySuccess", action);
+    pool.query("sql").then((data) => {
+      expect(data).toBe("data");
       expect(action).toHaveBeenCalledTimes(1);
-      expect(action).toHaveBeenCalledWith('data');
+      expect(action).toHaveBeenCalledWith("data");
     });
   });
 
-  it('should reject with a QueryFailError', async () => {
+  it("should reject with a QueryFailError", async () => {
     const connection = new MySQLConnection(undefined);
 
     connection.query = jest.fn((): any => Promise.reject());
@@ -986,31 +986,31 @@ describe('MegaPool.query', () => {
     const pool = new MegaPool({}, undefined, driver);
     const action = jest.fn();
 
-    pool.on('QueryFail', action);
+    pool.on("QueryFail", action);
 
-    pool.query('sql').catch((error) => {
+    pool.query("sql").catch((error) => {
       expect(error).toBeInstanceOf(QueryFailError);
-      expect(error.message).toBe('Query execution failed');
+      expect(error.message).toBe("Query execution failed");
       expect(action).toHaveBeenCalledTimes(1);
-      expect(action).toHaveBeenCalledWith('Query execution failed');
+      expect(action).toHaveBeenCalledWith("Query execution failed");
     });
   });
 
-  it('should reject with a CreateConnectionError', () => {
+  it("should reject with a CreateConnectionError", () => {
     (driver.createConnection as jest.Mock).mockRejectedValue(
-      new Error('message')
+      new Error("message")
     );
 
     const pool = new MegaPool({}, undefined, driver);
     const action = jest.fn();
 
-    pool.on('CreateFail', action);
+    pool.on("CreateFail", action);
 
-    pool.query('sql').catch((error) => {
+    pool.query("sql").catch((error) => {
       expect(error).toBeInstanceOf(CreateConnectionError);
-      expect(error.message).toBe('message');
+      expect(error.message).toBe("message");
       expect(action).toHaveBeenCalledTimes(1);
-      expect(action).toHaveBeenCalledWith('message');
+      expect(action).toHaveBeenCalledWith("message");
     });
   });
   // it('should reject with a CloseConnectionError', () => {});
@@ -1019,30 +1019,30 @@ describe('MegaPool.query', () => {
   // it('should reject with a MaxQueueTimeError', () => {});
 });
 
-describe('MegaPool.shutdown', () => {
-  it('should close all idle connections and resolve', async () => {
+describe("MegaPool.shutdown", () => {
+  it("should close all idle connections and resolve", async () => {
     const connection = new MySQLConnection(undefined);
     (driver.createConnection as jest.Mock).mockResolvedValue(connection);
     const pool = new MegaPool({}, undefined, driver);
     const connection1 = await pool.request();
     const connection2 = await pool.request();
-    expect(pool.getAquiredCount()).toBe(2);
+    expect(pool.getAcquiredCount()).toBe(2);
     expect(pool.getIdleCount()).toBe(0);
     connection1.release();
     connection2.release();
     expect(pool.getIdleCount()).toBe(2);
-    expect(pool.getAquiredCount()).toBe(0);
+    expect(pool.getAcquiredCount()).toBe(0);
     // shutdown
     expect(await pool.shutdown()).resolves;
   });
 
-  it('should reject if you dont release the connection', async () => {
+  it("should reject if you dont release the connection", async () => {
     const connection = new MySQLConnection(undefined);
     (driver.createConnection as jest.Mock).mockResolvedValue(connection);
     const pool = new MegaPool({}, undefined, driver);
     const connection1 = await pool.request();
     const connection2 = await pool.request();
-    expect(pool.getAquiredCount()).toBe(2);
+    expect(pool.getAcquiredCount()).toBe(2);
     expect(pool.getIdleCount()).toBe(0);
     // never relase the connections
     // shutdown
@@ -1062,9 +1062,9 @@ describe('MegaPool.shutdown', () => {
     expect(await pool.shutdown()).resolves;
   });
 
-  it('should reject if a connection could not be closed', async () => {
+  it("should reject if a connection could not be closed", async () => {
     const connection = new MySQLConnection(undefined);
-    connection.close = jest.fn(() => Promise.reject(new Error('message')));
+    connection.close = jest.fn(() => Promise.reject(new Error("message")));
     (driver.createConnection as jest.Mock).mockResolvedValue(connection);
     const pool = new MegaPool({}, { shouldRetry: false }, driver);
     const brokenConnections: Array<MySQLConnection> = [];
@@ -1072,7 +1072,7 @@ describe('MegaPool.shutdown', () => {
     const action = jest.fn((connection: MySQLConnection) => {
       brokenConnections.push(connection);
     });
-    pool.on('CloseFail', action);
+    pool.on("CloseFail", action);
     const connection1 = await pool.request();
     const connection2 = await pool.request();
     connection1.release();
@@ -1082,7 +1082,7 @@ describe('MegaPool.shutdown', () => {
       await pool.shutdown();
     } catch (error) {
       expect(error).toBeInstanceOf(CloseConnectionError);
-      expect((error as Error).message).toBe('message');
+      expect((error as Error).message).toBe("message");
       expect(action).toHaveBeenCalledTimes(2);
       connection.close = jest.fn(() => Promise.resolve());
       brokenConnections.forEach(async (connection) => {
@@ -1091,7 +1091,7 @@ describe('MegaPool.shutdown', () => {
     }
   });
 
-  it('should not perform any farther operations while shutdown procecss', async () => {
+  it("should not perform any farther operations while shutdown procecss", async () => {
     const connection = new MySQLConnection(undefined);
     connection.close = jest.fn(() => Promise.resolve());
 
@@ -1114,7 +1114,7 @@ describe('MegaPool.shutdown', () => {
     }
 
     try {
-      await pool.query('sql');
+      await pool.query("sql");
     } catch (error) {
       expect(error).toBeInstanceOf(MegaPoolError);
     }
@@ -1144,7 +1144,7 @@ describe('MegaPool.shutdown', () => {
     }
 
     try {
-      pool.getAquiredCount();
+      pool.getAcquiredCount();
     } catch (error) {
       expect(error).toBeInstanceOf(MegaPoolError);
     }
@@ -1156,7 +1156,7 @@ describe('MegaPool.shutdown', () => {
     }
 
     try {
-      pool.getQueuedCount();
+      pool.getRequestCount();
     } catch (error) {
       expect(error).toBeInstanceOf(MegaPoolError);
     }
@@ -1175,63 +1175,63 @@ describe('MegaPool.shutdown', () => {
   });
 });
 
-it('MegaPool.getErrors', () => {
+it("MegaPool.getErrors", () => {
   const pool = new MegaPool({}, undefined, driver);
 
   // should return pool errors
   expect(pool.getErrors().length).toBe(0);
 });
 
-it('MegaPool.getPoolOptions', () => {
+it("MegaPool.getPoolOptions", () => {
   const pool = new MegaPool({}, { shouldRetry: false }, driver);
 
   // should return pool options
   expect(pool.getPoolOptions().shouldRetry).toBe(false);
 });
 
-it('MegaPool.getConnectionOptions', () => {
-  const pool = new MegaPool({ user: 'root' }, {}, driver);
+it("MegaPool.getConnectionOptions", () => {
+  const pool = new MegaPool({ user: "root" }, {}, driver);
 
   // should return connection options
-  expect(pool.getConnectionOptions().user).toBe('root');
+  expect(pool.getConnectionOptions().user).toBe("root");
 });
 
-it('MegaPool.getDriver', () => {
+it("MegaPool.getDriver", () => {
   const pool = new MegaPool({}, {}, driver);
 
   // should return the driver
   expect(pool.getDriver()).toBeInstanceOf(MySQLDriver);
 });
 
-it('MegaPool.getAquiredCount', () => {
+it("MegaPool.getAcquiredCount", () => {
   const pool = new MegaPool({}, {}, driver);
 
   // should return the acquired connections count
-  expect(pool.getAquiredCount()).toBe(0);
+  expect(pool.getAcquiredCount()).toBe(0);
 });
 
-it('MegaPool.getIdleCount', () => {
+it("MegaPool.getIdleCount", () => {
   const pool = new MegaPool({}, {}, driver);
 
   // should return the idle connections count
   expect(pool.getIdleCount()).toBe(0);
 });
 
-it('MegaPool.getQueuedCount', () => {
+it("MegaPool.getRequestCount", () => {
   const pool = new MegaPool({}, {}, driver);
 
   // should return the idle connections count
-  expect(pool.getQueuedCount()).toBe(0);
+  expect(pool.getRequestCount()).toBe(0);
 });
 
-it('MegaPool.hasAcquired', () => {
+it("MegaPool.hasAcquired", () => {
   const pool = new MegaPool({}, {}, driver);
 
   // should tell if the pool has acquired connections
   expect(pool.hasAcquired()).toBe(false);
 });
 
-it('MegaPool.hasIdle', () => {
+it("MegaPool.hasIdle", () => {
   const pool = new MegaPool({}, {}, driver);
 
   // should tell if the pool has idle connections
