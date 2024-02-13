@@ -6,6 +6,7 @@ export class MegaPool extends EventEmitter {
   shutdown: jest.Mock;
   query: jest.Mock;
   release: jest.Mock;
+  setError: jest.Mock;
 
   constructor() {
     super();
@@ -14,5 +15,6 @@ export class MegaPool extends EventEmitter {
     this.query = jest.fn();
     this.release = jest.fn();
     this.request = jest.fn();
+    this.setError = jest.fn();
   }
 }

@@ -1,152 +1,165 @@
+// use MegaPool Mock
 jest.mock("../../../modules/mega/core/MegaPool");
+
+// use MySQLConnection Mock
 jest.mock("../../../modules/mega/drivers/MySQL/MySQLConnection");
 
-// jest.mock("../../../modules/mega/core/MegaPoolConnection");
-
 import { QueryFailError } from "../../../errors/mega/QueryFailError";
+import { MegaPoolConnectionError } from "../../../errors/mega/dev/MegaPoolConnectionError";
 import { MegaPool } from "../../../modules/mega/core/MegaPool";
 import { MegaPoolConnection } from "../../../modules/mega/core/MegaPoolConnection";
 import { MySQLConnection } from "../../../modules/mega/drivers/MySQL/MySQLConnection";
 
 describe("MegaPoolConnection.Constructor", () => {
-  it("connection must be a valid _MegaConnection", () => {
+  it("Should validaate the given connection", () => {
+    // valid _MegaConnection
     const connection = new MySQLConnection(undefined);
-    console.log(connection);
-
     const pool = new MegaPool(undefined);
-    console.log(pool);
+    expect(() => new MegaPoolConnection(connection, pool)).not.toThrow();
 
-    const c = new MegaPoolConnection(connection, pool);
-    console.log(c);
+    // invalid _MegaConnection
+    expect(() => new MegaPoolConnection({} as any, pool)).toThrow(
+      MegaPoolConnectionError
+    );
   });
 
-  // it("pool must be a valid MegaPool", () => {
-  //   expect(
-  //     () => new MegaPoolConnection(new MySQLConnection(undefined), {} as any)
-  //   ).toThrow(`The 'pool' argument must be an instance of 'MegaPool'`);
-  // });
+  it("Should validate the given pool", () => {
+    const connection = new MySQLConnection(undefined);
 
-  // it("should create a new MegaPoolConnection", () => {
-  //   const pool = new MegaPool(undefined);
-  //   const connection = new MySQLConnection(undefined);
+    // valid MegaPool instance
+    const pool = new MegaPool(undefined);
+    expect(() => new MegaPoolConnection(connection, pool)).not.toThrow();
 
-  //   expect(new MegaPoolConnection(connection, pool)).toBeInstanceOf(
-  //     MegaPoolConnection
-  //   );
-  // });
+    // invalid MegaPool instance
+    expect(() => new MegaPoolConnection(connection, {} as any)).toThrow(
+      MegaPoolConnectionError
+    );
+  });
+
+  it("Should create a new MegaPoolConnection", () => {
+    const pool = new MegaPool(undefined);
+    const connection = new MySQLConnection(undefined);
+
+    expect(new MegaPoolConnection(connection, pool)).toBeInstanceOf(
+      MegaPoolConnection
+    );
+  });
 });
 
-// describe("MegaPoolConnection.release", () => {
-//   it("should emit the ConnectionRelease event", () => {
-//     const connection = new MySQLConnection(undefined);
-//     const pool = new MegaPool(undefined);
-//     pool.emit = jest.fn();
-//     // Create MegaPoolConnection with mock objects
-//     const megaPoolConnection = new MegaPoolConnection(connection, pool);
+describe("MegaPoolConnection.release", () => {
+  // The release tells the pool you are done using the connection
+  it("Should not be able to perform any farther operations after release", () => {
+    const connection = new MySQLConnection(undefined);
+    const pool = new MegaPool(undefined);
 
-//     // Release the connection
-//     megaPoolConnection.release();
+    // Create MegaPoolConnection with mock objects
+    const megaPoolConnection = new MegaPoolConnection(connection, pool);
 
-//     // Check if ConnectionRelease event is emitted
-//     expect(pool.emit).toHaveBeenCalledWith("ConnectionRelease", connection);
-//   });
+    // Release the connection
+    megaPoolConnection.release();
 
-//   it("Cant perform any farther operations after releasing the connection", () => {
-//     const connection = new MySQLConnection(undefined);
-//     const pool = new MegaPool(undefined);
+    // Try to release again and expect an error
+    expect(() => megaPoolConnection.release()).toThrowError(
+      `Can't perform any farther operations after releasing the connection`
+    );
 
-//     // Create MegaPoolConnection with mock objects
-//     const megaPoolConnection = new MegaPoolConnection(connection, pool);
+    // Try to query and expect an error
+    megaPoolConnection.query("sql").catch((error) => {
+      expect(error.message).toBe(
+        `Can't perform any farther operations after releasing the connection`
+      );
+    });
+  });
+});
 
-//     // Release the connection
-//     megaPoolConnection.release();
+describe("MegaPoolConnection.query", () => {
+  it("Should resolve with data", async () => {
+    // Create MySQLConnection and MegaPool instance
+    const connection = new MySQLConnection(undefined);
+    const pool = new MegaPool(undefined);
 
-//     // Try to release again and expect an error
-//     expect(() => megaPoolConnection.release()).toThrowError(
-//       `Can't perform any farther operations after releasing the connection`
-//     );
+    // make MySQLConnection.query resolve with data
+    connection.query = jest.fn(() => Promise.resolve("data")) as any;
 
-//     megaPoolConnection.query("sql").catch((error) => {
-//       expect(error.message).toBe(
-//         `Can't perform any farther operations after releasing the connection`
-//       );
-//     });
-//   });
-// });
+    // make pool.emit a jest function
+    pool.emit = jest.fn();
 
-// describe("MegaPoolConnection.query", () => {
-//   it("should execute query successfully and emit QuerySuccess event", async () => {
-//     const connection = new MySQLConnection(undefined);
-//     connection.query = jest.fn(() => Promise.resolve("query result")) as any;
+    // create a MegaPoolConnection
+    const megaPoolConnection = new MegaPoolConnection(connection, pool);
 
-//     const pool = new MegaPool(undefined);
-//     pool.emit = jest.fn();
+    // execute qeury
+    const result = await megaPoolConnection.query<string>(
+      "SELECT * FROM table"
+    );
 
-//     const megaPoolConnection = new MegaPoolConnection(connection, pool);
+    // make sure the connection.query is executed by megaPoolConnection
+    expect(connection.query).toHaveBeenCalledWith(
+      "SELECT * FROM table",
+      undefined
+    );
 
-//     const result = await megaPoolConnection.query<string>(
-//       "SELECT * FROM table"
-//     );
+    // Pool should emit a QuerySuccess event
+    expect(pool.emit).toHaveBeenCalledWith("QuerySuccess", "data");
 
-//     // Verify that the query method was called with the correct parameters
-//     expect(connection.query).toHaveBeenCalledWith(
-//       "SELECT * FROM table",
-//       undefined
-//     );
+    // Query should resolve with data
+    expect(result).toBe("data");
+  });
 
-//     // Verify that the QuerySuccess event was emitted with the correct data
-//     expect(pool.emit).toHaveBeenCalledWith("QuerySuccess", "query result");
+  it("should reject with QueryFailError", async () => {
+    // Create MySQLConnection and MegaPool instance
+    const connection = new MySQLConnection(undefined);
+    const pool = new MegaPool(undefined);
 
-//     // Verify that the method resolved with the expected result
-//     expect(result).toBe("query result");
-//   });
+    // make MySQLConnection.query reject with error
+    connection.query = jest.fn(() => Promise.reject(new Error("message")));
 
-//   it("should handle query failure and emit QueryFail event", async () => {
-//     const connection = new MySQLConnection(undefined);
-//     connection.query = jest.fn(() =>
-//       Promise.reject(new Error("message"))
-//     ) as any;
+    // make pool.emit = jest function
+    pool.emit = jest.fn();
 
-//     const pool = new MegaPool(undefined);
-//     pool.emit = jest.fn();
+    // create a MegaPoolConnection
+    const megaPoolConnection = new MegaPoolConnection(connection, pool);
 
-//     const megaPoolConnection = new MegaPoolConnection(connection, pool);
+    // execute qeury
+    const result = await megaPoolConnection.query<QueryFailError>(
+      "SELECT * FROM table"
+    );
 
-//     try {
-//       await megaPoolConnection.query<string>("SELECT * FROM table");
-//     } catch (error) {
-//       // Verify that the QueryFail event was emitted with the correct error message
-//       expect(pool.emit).toHaveBeenCalledWith("QueryFail", "message");
+    // // Pool should emit a QueryFail event
+    // expect(pool.emit).toHaveBeenCalledWith(
+    //   "QueryFail",
+    //   expect.any(QueryFailError)
+    // );
 
-//       // Verify that the method rejected with the expected error
-//       expect(error).toBeInstanceOf(QueryFailError);
-//       expect((error as Error).message).toBe("message");
-//     }
-//   });
+    // // Query should reject with error
+    // expect(result).toBeInstanceOf(QueryFailError);
+  });
 
-//   it("should handle query failure using a default message", async () => {
-//     const connection = new MySQLConnection(undefined);
-//     connection.query = jest.fn(
-//       () => Promise.reject() // no reason
-//     ) as any;
+  // it("Should reject with The QueryFailError default message", async () => {
+  //   // Create MySQLConnection and MegaPool instance
+  //   const connection = new MySQLConnection(undefined);
+  //   const pool = new MegaPool(undefined);
 
-//     const pool = new MegaPool(undefined);
-//     pool.emit = jest.fn();
+  //   // make MySQLConnection.query reject with no error
+  //   connection.query = jest.fn(() => Promise.reject());
 
-//     const megaPoolConnection = new MegaPoolConnection(connection, pool);
+  //   // make pool.emit a jest function
+  //   pool.emit = jest.fn();
 
-//     try {
-//       await megaPoolConnection.query<string>("SELECT * FROM table");
-//     } catch (error) {
-//       // Verify that the QueryFail event was emitted with the correct error message
-//       expect(pool.emit).toHaveBeenCalledWith(
-//         "QueryFail",
-//         "Query execution failed"
-//       );
+  //   // create a MegaPoolConnection
+  //   const megaPoolConnection = new MegaPoolConnection(connection, pool);
 
-//       // Verify that the method rejected with the expected error
-//       expect(error).toBeInstanceOf(QueryFailError);
-//       expect((error as Error).message).toBe("Query execution failed");
-//     }
-//   });
-// });
+  //   // execute qeury
+  //   const result = await megaPoolConnection.query<QueryFailError>(
+  //     "SELECT * FROM table"
+  //   );
+
+  //   // Pool should emit a QueryFail event with QueryFailError
+  //   expect(pool.emit).toHaveBeenCalledWith("QueryFail", QueryFailError);
+
+  //   // Query should reject with QueryFailError
+  //   expect(result).toBeInstanceOf(QueryFailError);
+
+  //   // Message should be "Query execution failed"
+  //   expect(result.message).toBe("Query execution failed");
+  // });
+});
