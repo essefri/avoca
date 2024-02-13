@@ -4,6 +4,6 @@ export class MegaPoolConnection {
 
   constructor() {
     this.release = jest.fn();
-    this.query = jest.fn(() => Promise.resolve('data'));
+    this.query = jest.fn();
   }
 }

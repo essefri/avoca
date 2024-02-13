@@ -249,8 +249,10 @@ export class MegaPool extends EventEmitter {
   private setDriver(driver: _MegaDriver): void {
     if (Test.isUndefined(driver)) {
       this.driver = new MySQLDriver();
+      return;
     } else if (Test.isChildOf(driver, MySQLDriver)) {
       this.driver = driver;
+      return;
     }
 
     throw new MegaPoolError(

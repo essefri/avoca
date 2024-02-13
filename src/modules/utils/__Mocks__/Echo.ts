@@ -1,5 +1,5 @@
-import { EchoError } from '../../errors/EchoError';
-import { Test } from '../utils/Test';
+import { EchoError } from "../../../errors/EchoError";
+import { Test } from "../../utils/Test";
 
 type Job<T> = () => T | Promise<T>;
 
@@ -13,7 +13,7 @@ export const Echo = {
   retry: jest.fn((job: Job<any>): Promise<any> => {
     return new Promise((resolve, reject) => {
       if (!Test.isFunction(job)) {
-        return reject(new EchoError('The job must be a function'));
+        return reject(new EchoError("The job must be a function"));
       }
 
       const task = (): Promise<any> => {
